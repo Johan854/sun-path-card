@@ -21,7 +21,8 @@ sunset_entity: sensor.sun_next_setting
 dusk_entity: sensor.sun_next_dusk
 midnight_entity: sensor.sun_next_midnight
 ```
-Options lune : `moon_style` (`real` = photo, par défaut ; `drawn` = dessinée), `moon_image` (URL d'une autre photo, par ex. `/local/lune.jpg`), `moon_position` (left/right), `default_view` (base/horizon/calendar), `moon_title`, `hide_starfield`, `hide_buttons`, `southern_hemisphere`, `latitude`/`longitude` (sinon ceux de Home Assistant).
+Options lune : `moon_style` (`real` = photos, par défaut ; `drawn` = dessinée), `moon_rotate` (oriente la lune comme dans le ciel), `moon_position` (left/right), `default_view` (base/horizon/calendar), `moon_title`, `hide_starfield`, `hide_buttons`, `latitude`/`longitude` (sinon ceux de Home Assistant).
 La lune est calculée dans la carte (algorithmes de SunCalc) : aucun capteur lunaire n'est nécessaire.
 
-La photo de lune est chargée depuis Wikimedia Commons (domaine public) ; si elle ne peut pas être chargée, la carte revient automatiquement à la lune dessinée.
+## Crédits
+Les 31 photos de lune du dossier `moon_pic` viennent de [lunar-phase-card](https://github.com/ngocjohn/lunar-phase-card) de Viet Ngoc (licence MIT). Elles sont chargées depuis ce dépôt via jsDelivr ; en cas d'échec, depuis le dépôt d'origine, puis la carte revient à la lune dessinée. Les calculs astronomiques s'inspirent de SunCalc (Vladimir Agafonkin, BSD-2).

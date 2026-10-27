@@ -5,8 +5,12 @@
  * et frise chronologique des prochains événements (aube, lever, midi, coucher, crépuscule, minuit).
  * Thème clair/sombre automatique, éditeur visuel, textes en français.
  */
-const CARD_VERSION = "1.1.0";
-const MOON_IMG = "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/FullMoon2010.jpg/640px-FullMoon2010.jpg";
+const CARD_VERSION = "1.2.0";
+// Photos de lune (31 images, une par jour du cycle) : copie hébergée dans ce dépôt, puis dépôt d'origine de lunar-phase-card (Viet Ngoc, MIT) en secours
+const MOON_URLS = [
+  (i) => `https://cdn.jsdelivr.net/gh/Johan854/sun-path-card@v1.2.0/moon_pic/${i}_moon.webp`,
+  (i) => `https://cdn.jsdelivr.net/gh/ngocjohn/lunar-phase-card@1.14.0/moon_pic/${i}_moon.png`,
+];
 
 const DEFAULTS = {
   title: "Soleil",
@@ -26,7 +30,7 @@ const DEFAULTS = {
   mode: "both", // sun | moon | both
   moon_position: "left",
   moon_style: "real", // real | drawn
-  moon_image: "",
+  moon_rotate: true,
   default_view: "base",
   hide_starfield: false,
   hide_buttons: false,
@@ -89,7 +93,8 @@ const MoonCalc = (() => {
     let alt = Math.asin(Math.sin(phi) * Math.sin(c.dec) + Math.cos(phi) * Math.cos(c.dec) * Math.cos(H));
     alt += refr(alt);
     const az = Math.atan2(Math.sin(H), Math.cos(H) * Math.sin(phi) - Math.tan(c.dec) * Math.cos(phi));
-    return { altitude: alt / rad, azimuth: (az / rad + 180 + 360) % 360, distance: c.dist };
+    const pa = Math.atan2(Math.sin(H), Math.tan(phi) * Math.cos(c.dec) - Math.sin(c.dec) * Math.cos(H));
+    return { altitude: alt / rad, azimuth: (az / rad + 180 + 360) % 360, distance: c.dist, pa: pa / rad };
   }
   function illum(date) {
     const d = days(date), M = rad * (357.5291 + 0.98560028 * d);
@@ -246,7 +251,9 @@ class SunPathCard extends HTMLElement {
 
     let body = "";
     if (view === "base") {
-      body = `<div class="base ${c.moon_position === "right" ? "mr" : ""}"><div class="mimg">${MoonCalc.svg(phase, 64, { south, big: true, img: (c.moon_style === "drawn" || this._imgFail) ? "" : (c.moon_image || MOON_IMG) })}
+      body = `<div class="base ${c.moon_position === "right" ? "mr" : ""}"><div class="mimg">${(c.moon_style === "drawn" || (this._imgStage || 0) >= MOON_URLS.length)
+          ? MoonCalc.svg(phase, 64, { south, big: true })
+          : `<img class="mireal" alt="${esc(name.label)}" draggable="false" src="${MOON_URLS[this._imgStage || 0](Math.round(phase * 30) % 31)}" style="${c.moon_rotate ? `transform:rotate(${pos.pa.toFixed(1)}deg)` : ""}">`}
         <div class="mn">${esc(name.label)}</div></div><div class="data">${rows}</div></div>`;
     } else if (view === "horizon") {
       const d0 = new Date(now); d0.setHours(0, 0, 0, 0);
@@ -296,11 +303,11 @@ class SunPathCard extends HTMLElement {
       .hd { display:flex; justify-content:space-between; align-items:center; } .hd .t { font-weight:700; font-size:1.05em; }
       .tg { display:flex; align-items:center; gap:.3em; font-size:.8em; padding:.35em .7em; border-radius:99px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.15); }
       .base { display:grid; grid-template-columns:minmax(8em,.9fr) 1.4fr; gap:14px; align-items:center; } .base.mr { direction:rtl; } .base.mr > * { direction:ltr; }
-      .mimg { display:flex; flex-direction:column; align-items:center; gap:.5em; } .mimg svg { width:100%; max-width:11em; height:auto; filter:drop-shadow(0 0 1.2em rgba(246,239,207,.25)); }
+      .mimg { display:flex; flex-direction:column; align-items:center; gap:.5em; } .mimg svg, .mimg img { width:100%; max-width:11em; height:auto; filter:drop-shadow(0 0 1.2em rgba(246,239,207,.25)); } .mireal { aspect-ratio:1; object-fit:contain; transition:transform .4s; }
       .mn { font-weight:700; font-size:.95em; text-align:center; }
       .data { display:flex; flex-direction:column; } .row { display:grid; grid-template-columns:auto 1fr auto; gap:.55em; align-items:center; padding:.42em 0; border-top:1px solid rgba(255,255,255,.1); font-size:.84em; }
       .row:first-child { border-top:0; } .row ha-icon { color:#f6e9a8; } .rl { color:#b9bfd6; } .row b { text-align:right; font-variant-numeric:tabular-nums; }
-      @container (max-width: 360px) { .base { grid-template-columns:1fr; } .mimg svg { max-width:9em; } }
+      @container (max-width: 360px) { .base { grid-template-columns:1fr; } .mimg svg, .mimg img { max-width:9em; } }
       .graph svg, .cal svg { display:block; width:100%; height:auto; } .graph { border-radius:16px; background:rgba(255,255,255,.05); padding:8px; border:1px solid rgba(255,255,255,.1); }
       .gl { display:flex; justify-content:space-between; font-size:.78em; color:#c7cce0; padding:4px 4px 0; }
       .cal { border-radius:16px; background:rgba(255,255,255,.05); padding:10px; border:1px solid rgba(255,255,255,.1); } .ch { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; text-transform:capitalize; }
@@ -333,8 +340,8 @@ class SunPathCard extends HTMLElement {
       const R = this.shadowRoot;
       R.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => { this._mv = b.dataset.view; this._sig = ""; this._render(); }));
       R.querySelectorAll("[data-cal]").forEach((b) => b.addEventListener("click", () => { this._calOff = (this._calOff || 0) + Number(b.dataset.cal); this._sig = ""; this._render(); }));
-      const im = R.querySelector(".mimgreal");
-      if (im) im.addEventListener("error", () => { this._imgFail = true; this._sig = ""; this._render(); });
+      const im = R.querySelector(".mireal");
+      if (im) im.addEventListener("error", () => { this._imgStage = (this._imgStage || 0) + 1; this._sig = ""; this._render(); });
       const t = R.querySelector("[data-tg]");
       if (t) t.addEventListener("click", () => { this._force = false; this._sig = ""; this._render(); });
       return;
@@ -463,7 +470,7 @@ class SunPathCard extends HTMLElement {
 
 const LABELS = { title: "Titre", theme: "Thème", sun_entity: "Entité soleil (sun.sun)", azimuth_entity: "Azimut solaire", elevation_entity: "Élévation solaire",
   rising_entity: "Soleil montant (binary_sensor)", dawn_entity: "Prochaine aube", sunrise_entity: "Prochain lever", noon_entity: "Prochain midi solaire",
-  sunset_entity: "Prochain coucher", dusk_entity: "Prochain crépuscule", midnight_entity: "Prochain minuit solaire", show_events: "Afficher la frise des événements", show_stars: "Afficher les étoiles la nuit", mode: "Affichage", moon_position: "Position de la lune", default_view: "Vue par défaut", moon_title: "Titre de la vue lune", moon_style: "Style de la lune", moon_image: "Image de lune personnalisée (URL, facultatif)", hide_starfield: "Masquer les étoiles", hide_buttons: "Masquer les onglets", latitude: "Latitude (vide = Home Assistant)", longitude: "Longitude (vide = Home Assistant)", southern_hemisphere: "Hémisphère sud" };
+  sunset_entity: "Prochain coucher", dusk_entity: "Prochain crépuscule", midnight_entity: "Prochain minuit solaire", show_events: "Afficher la frise des événements", show_stars: "Afficher les étoiles la nuit", mode: "Affichage", moon_position: "Position de la lune", default_view: "Vue par défaut", moon_title: "Titre de la vue lune", moon_style: "Style de la lune", moon_rotate: "Orienter la lune comme dans le ciel", hide_starfield: "Masquer les étoiles", hide_buttons: "Masquer les onglets", latitude: "Latitude (vide = Home Assistant)", longitude: "Longitude (vide = Home Assistant)", southern_hemisphere: "Hémisphère sud" };
 const SCHEMA = [
   { type: "grid", name: "", schema: [{ name: "title", selector: { text: {} } },
     { name: "theme", selector: { select: { mode: "dropdown", options: [{ value: "auto", label: "Automatique" }, { value: "light", label: "Clair" }, { value: "dark", label: "Sombre" }] } } }] },
@@ -474,7 +481,7 @@ const SCHEMA = [
       { name: "moon_position", selector: { select: { mode: "dropdown", options: [{ value: "left", label: "Lune à gauche" }, { value: "right", label: "Lune à droite" }] } } },
       { name: "default_view", selector: { select: { mode: "dropdown", options: [{ value: "base", label: "Lune" }, { value: "horizon", label: "Horizon" }, { value: "calendar", label: "Calendrier" }] } } } ] },
     { name: "moon_style", selector: { select: { mode: "dropdown", options: [{ value: "real", label: "Lune réelle (photo)" }, { value: "drawn", label: "Lune dessinée" }] } } },
-    { name: "moon_image", selector: { text: {} } },
+    { name: "moon_rotate", selector: { boolean: {} } },
     { name: "moon_title", selector: { text: {} } },
     { type: "grid", name: "", schema: [{ name: "hide_starfield", selector: { boolean: {} } }, { name: "hide_buttons", selector: { boolean: {} } }] },
     { type: "grid", name: "", schema: [{ name: "latitude", selector: { number: { mode: "box", step: "any" } } }, { name: "longitude", selector: { number: { mode: "box", step: "any" } } }] } ] },
