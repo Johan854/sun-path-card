@@ -8,7 +8,7 @@
 const CARD_VERSION = "1.2.0";
 // Photos de lune (31 images, une par jour du cycle) : copie hébergée dans ce dépôt, puis dépôt d'origine de lunar-phase-card (Viet Ngoc, MIT) en secours
 const MOON_URLS = [
-  (i) => `https://cdn.jsdelivr.net/gh/Johan854/sun-path-card@v1.2.0/moon_pic/${i}_moon.webp`,
+  (i) => `https://cdn.jsdelivr.net/gh/Johan854/sun-path-card@35a70dee896aa5f202e4a9e374bf6fa3d9315cb0/moon_pic/${i}_moon.webp`,
   (i) => `https://cdn.jsdelivr.net/gh/ngocjohn/lunar-phase-card@1.14.0/moon_pic/${i}_moon.png`,
 ];
 
