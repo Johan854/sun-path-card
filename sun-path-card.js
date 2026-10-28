@@ -1,3 +1,4 @@
+{ // bloc isolé : aucune variable ne fuit vers les autres cartes
 /*
  * Sun Path Card (FR) — carte 2 en 1 soleil / lune
  * Carte Home Assistant « soleil » inspirée de lunar-phase-card : ciel qui change selon l'élévation
@@ -5,16 +6,47 @@
  * et frise chronologique des prochains événements (aube, lever, midi, coucher, crépuscule, minuit).
  * Thème clair/sombre automatique, éditeur visuel, textes en français.
  */
-const CARD_VERSION = "1.2.0";
+const CARD_VERSION = "1.3.0";
 // Photos de lune (31 images, une par jour du cycle) : copie hébergée dans ce dépôt, puis dépôt d'origine de lunar-phase-card (Viet Ngoc, MIT) en secours
 const MOON_URLS = [
   (i) => `https://cdn.jsdelivr.net/gh/Johan854/sun-path-card@35a70dee896aa5f202e4a9e374bf6fa3d9315cb0/moon_pic/${i}_moon.webp`,
   (i) => `https://cdn.jsdelivr.net/gh/ngocjohn/lunar-phase-card@1.14.0/moon_pic/${i}_moon.png`,
 ];
 
+/* === NUANCE COMMUNE v2 (cartes Johan854) ===
+ * Bloc identique dans toutes les cartes. Options : nuance, nuance_perso, intensite.
+ * nuance "theme" (par défaut) : suit la variable carte-nuance du thème Home Assistant ;
+ * si elle n'existe pas, la carte garde ses couleurs d'origine. Intensité : 0 = neutre, 1 = normal, 2 = très coloré. */
+const GV_NUANCES = [["braise", "Braise (rouge)", "#e0524f"], ["ocean", "Océan (bleu)", "#2f8fd8"], ["lagon", "Lagon (turquoise)", "#1fb5a8"], ["foret", "Forêt (vert)", "#3fae5a"], ["lavande", "Lavande (violet)", "#8a63d8"], ["framboise", "Framboise (rose)", "#e05597"], ["ambre", "Ambre (orange)", "#e8902c"], ["ardoise", "Ardoise (neutre)", "#7d8595"]];
+const GV_DEFAULTS = { nuance: "theme", intensite: 1 };
+const gvAccent = (c) => {
+  const p = c && c.nuance_perso;
+  if (c && c.nuance === "perso") {
+    if (Array.isArray(p) && p.length === 3) return "#" + p.map((v) => Math.max(0, Math.min(255, Math.round(+v || 0))).toString(16).padStart(2, "0")).join("");
+    if (typeof p === "string" && /^#?[0-9a-f]{6}$/i.test(p.trim())) return "#" + p.trim().replace("#", "");
+  }
+  const n = GV_NUANCES.find((x) => x[0] === (c && c.nuance));
+  return n ? n[2] : "var(--carte-nuance)";
+};
+/* Variables posées sur <ha-card> : --g-bg-x (fond dégradé teinté) et --acc-ui-x (couleur d'accent).
+ * Sans nuance (thème sans carte-nuance), elles sont invalides : chaque carte retombe alors sur ses couleurs d'origine. */
+const gvStyle = (c, dark) => {
+  const i = Number(c && c.intensite), ai = Number.isFinite(i) ? Math.max(0, Math.min(2, i)) : 1;
+  const m = (pct, base) => `color-mix(in srgb,var(--acc-ui) ${+(pct * ai).toFixed(1)}%,${base})`;
+  const bg = dark ? `linear-gradient(160deg,${m(5, "#1b1e32")} 0%,${m(11, "#1f1b2c")} 55%,${m(22, "#1c1620")} 100%)`
+    : `linear-gradient(160deg,${m(2, "#f8f9fd")} 0%,${m(5, "#eef1f8")} 55%,${m(11, "#f8f8fa")} 100%)`;
+  return `--acc-ui:${gvAccent(c)};--g-bg-x:${bg};--acc-ui-x:color-mix(in srgb,var(--acc-ui) ${dark ? "80%,#fff" : "82%,#000"})`;
+};
+const GV_FIELDS = [
+  { name: "nuance", selector: { select: { mode: "dropdown", options: [{ value: "theme", label: "Selon le thème (couleurs d'origine)" }, ...GV_NUANCES.map((n) => ({ value: n[0], label: n[1] })), { value: "perso", label: "Personnalisée" }] } } },
+  { name: "nuance_perso", selector: { color_rgb: {} } },
+  { name: "intensite", selector: { number: { min: 0, max: 2, step: 0.1, mode: "slider" } } }];
+const GV_LABELS = { nuance: "Nuance de couleur", nuance_perso: "Couleur personnalisée (nuance « Personnalisée »)", intensite: "Intensité de la nuance" };
+/* === FIN NUANCE COMMUNE === */
+
 const DEFAULTS = {
   title: "Soleil",
-  theme: "auto",
+  theme: "auto", nuance: "theme", intensite: 1,
   sun_entity: "sun.sun",
   azimuth_entity: "sensor.sun_solar_azimuth",
   elevation_entity: "sensor.sun_solar_elevation",
@@ -409,10 +441,10 @@ class SunPathCard extends HTMLElement {
     this.shadowRoot.innerHTML = `
     <style>
       * { box-sizing:border-box; }
-      ha-card.dark { --sp-text:#f4f6fb; --sp-muted:#a9afc0; --sp-bg:linear-gradient(160deg,#1b1e32 0%,#241a2a 55%,#2d1519 100%); --sp-border:rgba(255,255,255,.14);
-        --sp-shadow:0 .6em 2em rgba(0,0,0,.35); --sp-glass:rgba(255,255,255,.07); --sp-glass-b:rgba(255,255,255,.13); --sp-acc:#ffc83d; }
-      ha-card.light { --sp-text:#1c2030; --sp-muted:#5d6477; --sp-bg:linear-gradient(160deg,#f8f9fd 0%,#eef1f8 55%,#f8eff0 100%); --sp-border:rgba(20,24,40,.12);
-        --sp-shadow:0 .4em 1.4em rgba(20,24,40,.12); --sp-glass:rgba(255,255,255,.7); --sp-glass-b:rgba(20,24,40,.1); --sp-acc:#d68a00; }
+      ha-card.dark { --sp-text:#f4f6fb; --sp-muted:#a9afc0; --sp-bg:var(--g-bg-x,linear-gradient(160deg,#1b1e32 0%,#241a2a 55%,#2d1519 100%)); --sp-border:rgba(255,255,255,.14);
+        --sp-shadow:0 .6em 2em rgba(0,0,0,.35); --sp-glass:rgba(255,255,255,.07); --sp-glass-b:rgba(255,255,255,.13); --sp-acc:var(--acc-ui-x,#ffc83d); }
+      ha-card.light { --sp-text:#1c2030; --sp-muted:#5d6477; --sp-bg:var(--g-bg-x,linear-gradient(160deg,#f8f9fd 0%,#eef1f8 55%,#f8eff0 100%)); --sp-border:rgba(20,24,40,.12);
+        --sp-shadow:0 .4em 1.4em rgba(20,24,40,.12); --sp-glass:rgba(255,255,255,.7); --sp-glass-b:rgba(20,24,40,.1); --sp-acc:var(--acc-ui-x,#d68a00); }
       ha-card { container-type:inline-size; display:flex; flex-direction:column; gap:12px; padding:16px; color:var(--sp-text); overflow:hidden;
         border-radius:24px; border:1px solid var(--sp-border); background:var(--sp-bg); box-shadow:var(--sp-shadow); }
       ha-icon { --mdc-icon-size:1.2em; flex:none; }
@@ -435,7 +467,7 @@ class SunPathCard extends HTMLElement {
       @container (max-width: 300px) { .ev { grid-template-columns:auto 1fr auto; } .ev .ed { display:none; } }
       @media (prefers-reduced-motion: reduce) { .tw, .halo { animation:none; } }
     </style>
-    <ha-card class="${dark ? "dark" : "light"}">
+    <ha-card class="${dark ? "dark" : "light"}" style="${gvStyle(this._config, dark)}">
       <div class="hd"><span class="t">${esc(c.title)}</span><span class="ph">${c.mode === "sun" ? "" : `<button class="tg" data-tg="1" title="Afficher la lune"><ha-icon icon="mdi:moon-waning-crescent"></ha-icon></button>`}<ha-icon icon="${pIcon}"></ha-icon>${phase}</span></div>
             <div class="skyw">
         <svg viewBox="0 0 ${W} ${H}" aria-label="Position du soleil">
@@ -468,12 +500,12 @@ class SunPathCard extends HTMLElement {
   }
 }
 
-const LABELS = { title: "Titre", theme: "Thème", sun_entity: "Entité soleil (sun.sun)", azimuth_entity: "Azimut solaire", elevation_entity: "Élévation solaire",
+const LABELS = { ...GV_LABELS, title: "Titre", theme: "Thème", sun_entity: "Entité soleil (sun.sun)", azimuth_entity: "Azimut solaire", elevation_entity: "Élévation solaire",
   rising_entity: "Soleil montant (binary_sensor)", dawn_entity: "Prochaine aube", sunrise_entity: "Prochain lever", noon_entity: "Prochain midi solaire",
   sunset_entity: "Prochain coucher", dusk_entity: "Prochain crépuscule", midnight_entity: "Prochain minuit solaire", show_events: "Afficher la frise des événements", show_stars: "Afficher les étoiles la nuit", mode: "Affichage", moon_position: "Position de la lune", default_view: "Vue par défaut", moon_title: "Titre de la vue lune", moon_style: "Style de la lune", moon_rotate: "Orienter la lune comme dans le ciel", hide_starfield: "Masquer les étoiles", hide_buttons: "Masquer les onglets", latitude: "Latitude (vide = Home Assistant)", longitude: "Longitude (vide = Home Assistant)", southern_hemisphere: "Hémisphère sud" };
 const SCHEMA = [
   { type: "grid", name: "", schema: [{ name: "title", selector: { text: {} } },
-    { name: "theme", selector: { select: { mode: "dropdown", options: [{ value: "auto", label: "Automatique" }, { value: "light", label: "Clair" }, { value: "dark", label: "Sombre" }] } } }] },
+    { name: "theme", selector: { select: { mode: "dropdown", options: [{ value: "auto", label: "Automatique" }, { value: "light", label: "Clair" }, { value: "dark", label: "Sombre" }] } } }, ...GV_FIELDS] },
   { type: "grid", name: "", schema: [{ name: "show_events", selector: { boolean: {} } }, { name: "show_stars", selector: { boolean: {} } }] },
   { type: "grid", name: "", schema: [{ name: "mode", selector: { select: { mode: "dropdown", options: [{ value: "sun", label: "Soleil" }, { value: "moon", label: "Lune" }, { value: "both", label: "Les deux (soleil le jour, lune la nuit)" }] } } }, { name: "southern_hemisphere", selector: { boolean: {} } }] },
   { type: "expandable", title: "Options lune", name: "", schema: [
@@ -516,3 +548,4 @@ customElements.define("sun-path-card-editor", SunPathCardEditor);
 window.customCards = window.customCards || [];
 window.customCards.push({ type: "sun-path-card", name: "Sun Path Card (FR)", description: "Soleil le jour (arc, azimut, élévation, événements), lune la nuit (phase, illumination, prochaines phases).", preview: true });
 console.info(`%c SUN-PATH-CARD %c v${CARD_VERSION} `, "color:#fff;background:#d68a00;font-weight:700;border-radius:3px 0 0 3px;padding:2px 4px", "color:#d68a00;background:#fff;font-weight:700;border-radius:0 3px 3px 0;padding:2px 4px");
+}
